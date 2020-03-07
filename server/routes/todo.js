@@ -1,14 +1,17 @@
 var express = require('express');
 var router = express.Router();
 
-const knex = require('../db/knex')
+const queries = require('../db/queries')
+const { validTodo, validId } = require('../lib/validations');
+const setStatusRenderError = require('../lib/responseHelpers');
 
 /* GET home page. */
 /* This router is mounted at /todo */
 router.get('/', (req, res) => {
-  knex('todo')
-    .select()
+  queries
+    .getAll()
     .then(todos => {
+      // res.json(todos)
       res.render('all', { todos: todos });
     });
 });
@@ -30,8 +33,8 @@ router.get('/:id/edit', (req, res) => {
 router.post('/', (req, res) => {
   validateTodoRenderError(req, res, (todo) => {
     todo.date = new Date();
-    knex('todo')
-      .insert(todo, 'id')
+    queries
+      .create(todo)
       .then(ids => {
         const id = ids[0];
         res.redirect(`/todo/${id}`);
@@ -42,9 +45,8 @@ router.post('/', (req, res) => {
 router.put('/:id', (req, res) => {
   validateTodoRenderError(req, res, (todo) => {
     const id = req.params.id;
-    knex('todo')
-      .where('id', id)
-      .update(todo, 'id')
+    queries.
+      update(id, todo)
       .then(() => {
         res.redirect(`/todo/${id}`);
       });
@@ -54,17 +56,13 @@ router.put('/:id', (req, res) => {
 router.delete('/:id', (req, res) => {
   const id = req.params.id;
   if (validId(id)) {
-    knex('todo')
-      .where('id', id)
-      .del()
+    queries
+      .delete(id)
       .then(() => {
         res.redirect('/todo');
       });
   } else {
-    res.status(500);
-    res.render('error', {
-      message: 'Invalid id'
-    });
+    setStatusRenderError(res, 500, 'Invalid id')
   }
 });
 
@@ -78,39 +76,31 @@ function validateTodoRenderError(req, res, callback) {
 
     callback(todo);
   } else {
-    res.status(500);
-    res.render('error', {
-      message: 'Invalid todo'
-    });
+    setStatusRenderError(res, 500, 'Invalid todo')
   }
 }
 
 function respondAndRenderTodo(id, res, viewName) {
   if (validId(id)) {
-    knex('todo')
-      .select()
-      .where('id', id)
-      .first()
+    queries
+      .getOne(id)
       .then(todo => {
-        res.render(viewName, todo);
+        if (todo) {
+          res.render(viewName, todo);
+        }
+        else {
+          setStatusRenderError.setStatusRenderError(res, 500, 'Invalid id')
+        }
       });
   } else {
-    res.status(500);
-    res.render('error', {
-      message: 'Invalid id'
-    });
+    setStatusRenderError(res, 500, 'Invalid id')
   }
 }
-
-function validTodo(todo) {
-  return typeof todo.title == 'string' &&
-    todo.title.trim() != '' &&
-    typeof todo.priority != 'undefined' &&
-    !isNaN(todo.priority);
-}
-
-function validId(id) {
-  return !isNaN(id);
+function setStatusRenderError1(res, statusCode, message) {
+  res.status(statusCode);
+  res.render('error', {
+    message
+  });
 }
 
 module.exports = router;
